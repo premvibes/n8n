@@ -4,7 +4,7 @@ set -euo pipefail
 # -----------------------------
 # Config — change these as needed
 # -----------------------------
-DOMAIN="n8n.gobotify.com"
+DOMAIN="n8n.example.com"
 EMAIL=""  # Optional. If empty, certbot will use --register-unsafely-without-email
 N8N_PORT="5678"
 N8N_HOST="$DOMAIN"
