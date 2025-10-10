@@ -1,52 +1,50 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# -----------------------------
-# Config — change these as needed
-# -----------------------------
-DOMAIN="n8n.example.com"
-EMAIL=""  # Optional. If empty, certbot will use --register-unsafely-without-email
-N8N_PORT="5678"
-N8N_HOST="$DOMAIN"
-COMPOSE_DIR="/opt/n8n"
-SITE_NAME="n8n"
+# =============================
+# Config (env-aware defaults)
+# Override with: sudo -E VAR=... bash install-n8n.sh
+# =============================
+DOMAIN="${DOMAIN:-n8n.gobotify.com}"        # e.g. 989.gobotify.com
+EMAIL="${EMAIL:-}"                          # empty -> certbot registers without email
+N8N_PORT="${N8N_PORT:-5678}"
+N8N_HOST="${N8N_HOST:-$DOMAIN}"             # n8n internal host setting
+COMPOSE_DIR="${COMPOSE_DIR:-/opt/n8n}"
+SITE_NAME="${SITE_NAME:-n8n}"               # nginx site name
 NGINX_SITE_PATH="/etc/nginx/sites-available/${SITE_NAME}"
 NGINX_SITE_LINK="/etc/nginx/sites-enabled/${SITE_NAME}"
 
-# -----------------------------
+# =============================
 # Helpers
-# -----------------------------
+# =============================
 log() { echo -e "\n\033[1;32m=> $*\033[0m"; }
 err() { echo -e "\n\033[1;31m!! $*\033[0m" >&2; }
 
-need_cmd() {
-  command -v "$1" >/dev/null 2>&1 || { err "Missing required command: $1"; exit 1; }
-}
-
-# -----------------------------
+# =============================
 # Root check
-# -----------------------------
+# =============================
 if [[ $EUID -ne 0 ]]; then
-  err "Please run as root (e.g., sudo bash install-n8n.sh)"
+  err "Please run as root (e.g., sudo -E DOMAIN=... bash install-n8n.sh)"
   exit 1
 fi
 
-# -----------------------------
+# =============================
 # Update & essentials
-# -----------------------------
+# =============================
 log "Updating apt and installing prerequisites..."
 apt-get update -y
 apt-get install -y ca-certificates curl gnupg lsb-release apt-transport-https
 
-# -----------------------------
+# =============================
 # Install Docker (official repo)
-# -----------------------------
+# =============================
 if ! command -v docker >/dev/null 2>&1; then
   log "Installing Docker Engine..."
   install -m 0755 -d /etc/apt/keyrings
-  curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-  chmod a+r /etc/apt/keyrings/docker.gpg
-
+  if [[ ! -f /etc/apt/keyrings/docker.gpg ]]; then
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+    chmod a+r /etc/apt/keyrings/docker.gpg
+  fi
   echo \
     "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
     $(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
@@ -59,19 +57,19 @@ else
   log "Docker already installed. Skipping."
 fi
 
-# -----------------------------
-# docker-compose (v1) for compatibility with your instruction
-# -----------------------------
+# =============================
+# docker-compose v1 (optional)
+# =============================
 if ! command -v docker-compose >/dev/null 2>&1; then
   log "Installing docker-compose (apt)..."
-  apt-get install -y docker-compose
+  apt-get install -y docker-compose || true
 else
   log "docker-compose already installed. Skipping."
 fi
 
-# -----------------------------
+# =============================
 # Create n8n compose stack
-# -----------------------------
+# =============================
 log "Creating n8n docker compose at ${COMPOSE_DIR}..."
 mkdir -p "$COMPOSE_DIR"
 cat > "${COMPOSE_DIR}/docker-compose.yml" <<'YML'
@@ -99,25 +97,23 @@ volumes:
   n8n_data:
 YML
 
-# Inject host into compose (keeping your config verbatim otherwise)
+# Inject host into compose
 sed -i "s/REPLACE_N8N_HOST/${N8N_HOST//\//\\/}/g" "${COMPOSE_DIR}/docker-compose.yml"
 
-# -----------------------------
+# =============================
 # Start n8n
-# -----------------------------
+# =============================
 log "Starting n8n container..."
 cd "$COMPOSE_DIR"
-
-# Prefer Docker Compose v2 if available, else fall back to v1
 if command -v docker compose >/dev/null 2>&1; then
   docker compose up -d
 else
   docker-compose up -d
 fi
 
-# -----------------------------
+# =============================
 # Install Nginx
-# -----------------------------
+# =============================
 if ! command -v nginx >/dev/null 2>&1; then
   log "Installing Nginx..."
   apt-get install -y nginx
@@ -126,9 +122,9 @@ else
   log "Nginx already installed. Skipping."
 fi
 
-# -----------------------------
-# Minimal HTTP server block to pass Certbot challenge
-# -----------------------------
+# =============================
+# Minimal HTTP server block for ACME
+# =============================
 log "Configuring minimal HTTP server for ${DOMAIN} (for certificate issuance)..."
 mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled
 
@@ -157,22 +153,22 @@ fi
 nginx -t
 systemctl reload nginx
 
-# -----------------------------
+# =============================
 # Install Certbot and get cert
-# -----------------------------
+# =============================
 log "Installing Certbot (Nginx plugin)..."
 apt-get install -y certbot python3-certbot-nginx
 
 log "Requesting Let's Encrypt certificate for ${DOMAIN}..."
 if [[ -n "$EMAIL" ]]; then
-  certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos --email "$EMAIL"
+  certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos --email "$EMAIL" || true
 else
-  certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos --register-unsafely-without-email
+  certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos --register-unsafely-without-email || true
 fi
 
-# -----------------------------
+# =============================
 # Full HTTPS reverse proxy for n8n
-# -----------------------------
+# =============================
 log "Writing full HTTPS Nginx config for ${DOMAIN}..."
 cat > "$NGINX_SITE_PATH" <<EOF
 server {
@@ -222,25 +218,22 @@ EOF
 nginx -t
 systemctl reload nginx
 
-# -----------------------------
+# =============================
 # UFW (if present)
-# -----------------------------
+# =============================
 if command -v ufw >/dev/null 2>&1; then
   log "Configuring UFW rules (allow OpenSSH, HTTP, HTTPS)..."
   ufw allow OpenSSH || true
   ufw allow 80/tcp || true
   ufw allow 443/tcp || true
-  # Do not auto-enable ufw if user hasn’t enabled it before
 fi
 
-# -----------------------------
+# =============================
 # Done
-# -----------------------------
+# =============================
 log "All set!
 
 - n8n container is running on port ${N8N_PORT}
 - Nginx is proxying https://${DOMAIN} -> 127.0.0.1:${N8N_PORT}
-- Certificates stored in /etc/letsencrypt/live/${DOMAIN}/
-
-If you changed DOMAIN/EMAIL, re-run this script.
+- Certificates: /etc/letsencrypt/live/${DOMAIN}/
 "
