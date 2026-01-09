@@ -5,7 +5,7 @@ set -euo pipefail
 # Config (env-aware defaults)
 # Override with: sudo -E VAR=... bash install-n8n.sh
 # =============================
-DOMAIN="${DOMAIN:-n8n.gobotify.com}"        # e.g. 989.gobotify.com
+DOMAIN="${DOMAIN:-n8n.successunlock.com}"        # e.g. 989.successunlock.com
 EMAIL="${EMAIL:-}"                          # empty -> certbot registers without email
 N8N_PORT="${N8N_PORT:-5678}"
 N8N_HOST="${N8N_HOST:-$DOMAIN}"             # n8n internal host setting
