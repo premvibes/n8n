@@ -27,9 +27,9 @@ services:
       QUEUE_HEALTH_CHECK_ACTIVE: "true"
       N8N_RUNNERS_ENABLED: "true"
       N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "true"
-      N8N_HOST: "n8n.gobotify.com"
+      N8N_HOST: "n8n.successunlock.com"
       N8N_PROTOCOL: "https"
-      WEBHOOK_URL: "https://n8n.gobotify.com"
+      WEBHOOK_URL: "https://n8n.successunlock.com"
 
 volumes:
   n8n_data:
@@ -46,7 +46,7 @@ apt-get install -y nginx
 ```
 server {
     listen 80;
-    server_name neightn.gobotify.com;
+    server_name neightn.successunlock.com;
 }
 ```
 
@@ -59,7 +59,7 @@ apt-get install python3-certbot-nginx
 
 - command to get free certificate using certbot
 ```
-sudo certbot --nginx -d neightn.gobotify.com
+sudo certbot --nginx -d neightn.successunlock.com
 ```
 
 
@@ -67,7 +67,7 @@ sudo certbot --nginx -d neightn.gobotify.com
 ```
 server {
     listen 443 ssl;
-    server_name n8n.gobotify.com;
+    server_name n8n.successunlock.com;
 
     ssl_certificate /etc/letsencrypt/live/<domain.name>/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/<domain.name>/privkey.pem;
@@ -102,7 +102,7 @@ server {
 
 server {
     listen 80;
-    server_name n8n.gobotify.com;
+    server_name n8n.successunlock.com;
 
     # Redirect all HTTP requests to HTTPS
     location / {
